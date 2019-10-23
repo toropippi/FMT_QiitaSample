@@ -211,7 +211,7 @@ def Carrying(E0,E1,E2):
 
 
 if __name__=="__main__":
-    digit_level = 19
+    digit_level = 16
     digitN = 1 << digit_level
 
     FMT_P0 = FMTClass(MODP=469762049 , MODP_WnSqrt=CreateWnSqrt(60733,469762049,26))

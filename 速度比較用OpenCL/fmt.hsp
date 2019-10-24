@@ -1,0 +1,228 @@
+#include "HSPCL64.as"
+HCLinit
+if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
+HCLSetDev 0//ここで使うCPU,GPUを指定
+mes HCLGetDeviceInfo_s(CL_DEVICE_NAME)//デバイス名取得
+
+
+
+
+
+#module
+#deffunc _init_ int dgl
+	digit_level = dgl
+    digitN = 1 << digit_level
+	
+    MODPARRAY0=60733,400162946,152496387,128390820,98642087,147230239,68832613,189793324,184507149,402028316,347674384,333286101,116670443,372464854,223627686,466071797,27785043,253899102,441396630,301569586,433624589,67609952,25192837,443138433,19610091,469762048,1
+    MODPARRAY1=59189,1691398392,255472056,115496270,1572113969,1620372816,1646154746,1224733688,1396251743,659655103,413894177,1018818278,1228360075,389546888,1049531030,1176194496,1553650617,239535518,400579931,1375989542,604217680,1434668375,1152530692,1452317833,1416949424,1811939328,1
+    MODPARRAY2=52278,719723363,226232492,895961877,455553081,844007986,603649502,988865942,439511509,1899780963,1781347658,556378134,675198716,1197212322,1577559259,1349859070,168432350,971306119,1947940162,1453957774,1881002012,918899846,740045640,567209306,1801542727,284861408,2013265920,1
+    MODP=469762049,1811939329,2013265921
+    MODP_WnSqrt=MODPARRAY0.(25-digit_level),MODPARRAY1.(25-digit_level),MODPARRAY2.(26-digit_level)
+    MODP_Wn=MODPARRAY0.(26-digit_level),MODPARRAY1.(26-digit_level),MODPARRAY2.(27-digit_level)
+	
+	gsz = 1 << (digit_level - 1)
+	lsz = 256
+	if lsz>gsz:lsz=gsz
+	gsz2 = digitN
+	lsz2 = 256
+	if lsz2>gsz2:lsz2=gsz2
+	
+	dim_i64 prg,3
+	dim_i64 krniFMT,3
+	dim_i64 krnuFMT,3
+	dim_i64 krnMul_i_i,3
+	dim_i64 krnPostNegFMT,3
+	dim_i64 krnPreNegFMT,3
+	dim_i64 krnDivN,3
+	dim_i64 krnPosNeg_To_HiLo,3
+	
+	prggnr=HCLCreateProgram("garner.cl")
+	krngnr=HCLCreateKernel(prggnr,"Garner")
+	
+	exist "fmt.cl"
+	sdim fmtclstr,strsize+1024
+	sdim fmtclstr2,strsize+1024
+	bload "fmt.cl",fmtclstr
+
+	
+	fmtclstr2="#define MODP (469762049)\n"+fmtclstr
+	bsave "fmt00.cl",fmtclstr2,strlen(fmtclstr2)
+	
+	fmtclstr2="#define MODP (1811939329)\n"+fmtclstr
+	bsave "fmt01.cl",fmtclstr2,strlen(fmtclstr2)
+
+	fmtclstr2="#define MODP (2013265921)\n"+fmtclstr
+	bsave "fmt02.cl",fmtclstr2,strlen(fmtclstr2)
+	
+	wait 5
+	prg.0=HCLCreateProgram("fmt00.cl")
+	prg.1=HCLCreateProgram("fmt01.cl")
+	prg.2=HCLCreateProgram("fmt02.cl")
+	
+		repeat 3
+		krniFMT.cnt=HCLCreateKernel(prg.cnt,"iFMT")
+		krnuFMT.cnt=HCLCreateKernel(prg.cnt,"uFMT")
+		krnMul_i_i.cnt=HCLCreateKernel(prg.cnt,"Mul_i_i")
+		krnPostNegFMT.cnt=HCLCreateKernel(prg.cnt,"PostNegFMT")
+		krnPreNegFMT.cnt=HCLCreateKernel(prg.cnt,"PreNegFMT")
+		krnDivN.cnt=HCLCreateKernel(prg.cnt,"DivN")
+		krnPosNeg_To_HiLo.cnt=HCLCreateKernel(prg.cnt,"PosNeg_To_HiLo")
+		loop
+	return
+
+#deffunc setpid int inpid
+	pid=inpid
+	return
+
+#deffunc uFMT var gpuMemA
+		repeat digit_level
+		HCLSetKrns krnuFMT.pid ,gpuMemA,1<<(digit_level-1-cnt),MODP_Wn.pid,1 << (digit_level - 1)
+		HCLDoKrn1 krnuFMT.pid,gsz,lsz
+		loop
+    return
+
+#deffunc iFMT var gpuMemA
+		repeat digit_level
+		HCLSetKrns krniFMT.pid ,gpuMemA,1<<cnt,MODP_Wn.pid,1 << (digit_level - 1)
+		HCLDoKrn1 krniFMT.pid,gsz,lsz
+		loop
+    return
+
+#deffunc Mul_i_i var gpuMemA,var gpuMemB
+	HCLSetKrns krnMul_i_i.pid ,gpuMemA,gpuMemB
+	HCLDoKrn1 krnMul_i_i.pid ,gsz2,lsz2
+    return
+
+#deffunc DivN var gpuMemA
+	HCLSetKrns krnDivN.pid ,gpuMemA,1<<digit_level
+	HCLDoKrn1 krnDivN.pid ,gsz2,lsz2
+    return
+
+
+#deffunc PreNegFMT var gpuMemA,var gpuMemB
+	HCLSetKrns krnPreNegFMT.pid,gpuMemA,gpuMemB,MODP_WnSqrt.pid,1<<digit_level
+	HCLDoKrn1 krnPreNegFMT.pid,gsz2,lsz2
+	return
+
+#deffunc PostNegFMT var gpuMemA
+	HCLSetKrns krnPostNegFMT.pid,gpuMemA,MODP_WnSqrt.pid,1<<digit_level
+	HCLDoKrn1 krnPostNegFMT.pid,gsz2,lsz2
+    return
+
+#deffunc PosNeg_To_HiLo var gpuMemE,var gpuMemA,var gpuMemB
+	HCLSetKrns krnPosNeg_To_HiLo.pid,gpuMemE,gpuMemA,gpuMemB,1<<digit_level
+	HCLDoKrn1 krnPosNeg_To_HiLo.pid,gsz2,lsz2
+    return
+
+#deffunc Carrying var E0,var E1,var E2,var Esum
+	gsz3 = 1 << (digit_level+1)
+	lsz3 = 256
+	if gsz3<256:lsz3=gsz3
+	HCLSetKrns krngnr,E0,E1,E2,Esum,digitN*2
+	HCLDoKrn1 krngnr,gsz3,lsz3
+	return
+
+#global
+
+
+
+
+
+
+*main
+	digit_level = 25
+    digitN = 1 << digit_level
+    _init_(digit_level)//初期化
+
+    mes "A,Bの要素数="+digitN
+
+    dim_i64 E,3
+    E.0=HCLCreateBuffer(digitN*4*2)
+    E.1=HCLCreateBuffer(digitN*4*2)
+    E.2=HCLCreateBuffer(digitN*4*2)
+
+	dim host_E,digitN * 2//結果はいるホストメモリ
+	Esum=HCLCreateBuffer(digitN*4*2)//結果はいるデバイスメモリ
+	HCLWriteBuffer Esum,host_E,digitN*4*2,0,0//0初期化
+
+    mes "初期値生成"
+    gosub*InitializeAB
+    dim_i64 A,3//GPU mem id
+    dim_i64 B,3//GPU mem id
+    A.0=HCLCreateBuffer(digitN*4)
+    B.0=HCLCreateBuffer(digitN*4)
+    A.1=HCLCreateBuffer(digitN*4)
+    B.1=HCLCreateBuffer(digitN*4)
+    A.2=HCLCreateBuffer(digitN*4)
+    B.2=HCLCreateBuffer(digitN*4)
+    HCLWriteBuffer A.0,host_A,digitN*4,0,0//gpuメモリ転送
+    HCLWriteBuffer B.0,host_B,digitN*4,0,0//gpuメモリ転送
+    HCLWriteBuffer A.1,host_A,digitN*4,0,0//gpuメモリ転送
+    HCLWriteBuffer B.1,host_B,digitN*4,0,0//gpuメモリ転送
+    HCLWriteBuffer A.2,host_A,digitN*4,0,0//gpuメモリ転送
+    HCLWriteBuffer B.2,host_B,digitN*4,0,0//gpuメモリ転送
+    wait 2
+
+    mes "OpenCLデバイス計算開始"
+    stime = gettime(7)+1000*gettime(6)+60000*gettime(5)
+
+    pid=0
+    gosub*Convolution
+    mes "0"
+    pid=1
+    gosub*Convolution
+    mes "1"
+    pid=2
+    gosub*Convolution
+    mes "2"
+
+    //ここからgarner&繰り上がり、E.0,E.1,E.2から復元繰り上げしEsumに出力
+	Carrying E.0, E.1, E.2 , Esum
+	mes "3"
+	
+	HCLFinish//デバイスタスクまち命令
+	printtime=gettime(7)+1000*gettime(6)+60000*gettime(5)-stime
+	if printtime<0:printtime+=3600000
+    mes "OpenCLデバイス計算終了"+printtime+"msec"
+
+    HCLReadBuffer Esum,host_E,digitN*4*2,0,0
+	//検算処理へ
+
+	wait 10
+	delete "fmt00.cl"
+	delete "fmt01.cl"
+	delete "fmt02.cl"
+	wait 500
+	end
+
+
+*InitializeAB
+	dim host_A,digitN
+	dim host_B,digitN
+		repeat digitN
+		host_A.cnt=rnd(32768)
+		host_B.cnt=rnd(32768)
+		loop
+	return
+
+*Convolution
+	setpid pid
+    A_Neg = HCLCreateBuffer(digitN*4)
+    B_Neg = HCLCreateBuffer(digitN*4)
+	PreNegFMT A.pid,A_Neg
+	PreNegFMT B.pid,B_Neg
+	uFMT A.pid
+	uFMT B.pid
+	uFMT A_Neg
+	uFMT B_Neg
+	Mul_i_i A.pid,B.pid
+	Mul_i_i A_Neg,B_Neg
+	iFMT B.pid
+	iFMT B_Neg
+	PostNegFMT B_Neg
+	DivN B.pid
+	DivN B_Neg
+	PosNeg_To_HiLo E.pid,B.pid,B_Neg
+	HCLReleaseMemObject A_Neg
+	HCLReleaseMemObject B_Neg
+    return

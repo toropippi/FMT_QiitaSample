@@ -2,6 +2,34 @@
 #define uint unsigned int
 
 
+/*
+//その0
+#define MODP 469762049
+#define NB 29
+#define R2 124630749
+#define MASK 536870911
+#define NR 469762047
+*/
+
+/*
+//その1
+#define MODP 1811939329
+#define NB 31
+#define R2 1145821717
+#define MASK 2147483647
+#define NR 1811939327
+*/
+
+/*
+//その2
+#define MODP 2013265921
+#define NB 31
+#define R2 796358521
+#define MASK 2147483647
+#define NR 2013265919
+*/
+
+
 
 //従来のmod関数
 //A*B%MODP
@@ -11,7 +39,8 @@ __device__ uint ABModC(uint a,uint b){
 	return (uint)(tmp%MODP);
 }
 */
-//除数決め打ちなのを利用して乗算だけに書き換えたバージョン
+/*
+//除数決め打ちなのを利用して乗算だけに書き換えたバージョン 自作
 __device__ uint ABModC(uint a,uint b){
 	uint blo=a*b;
 	uint bhi=__umulhi(a,b);
@@ -43,13 +72,45 @@ __device__ uint ABModC(uint a,uint b){
 	}
 	return blo;
 }
+*/
+
+//モンゴメリ
+__device__ ulong MontgomeryReduction(ulong t)
+{
+	ulong tc = t%4294967296;
+	ulong c = tc * NR;
+	//c %= 4294967296;
+	c &= MASK;
+	c *= MODP;
+	c += t;
+	c >>= NB;
+	if (c >= MODP)c -= MODP;
+	return c;
+}
+
+//a*b mod MOPDを返す
+__device__ uint MontgomeryMul(uint a,uint b){
+	return (uint)MontgomeryReduction(MontgomeryReduction((ulong)a * (ulong)b) * R2);
+}
+
+//aのb乗mod MOPDを返す
+__device__ uint MontgomeryExp(uint a,uint b){
+	ulong p = MontgomeryReduction((ulong)a * R2);
+	ulong x = MontgomeryReduction(R2);
+	uint y = b;
+	while (y!=0){
+		if (y%2==1){
+			x = MontgomeryReduction(x * p);
+		}
+		p = MontgomeryReduction(p * p);
+		y >>= 1;
+	}
+	return (uint)MontgomeryReduction(x);
+}
 
 
 
-
-
-
-
+/*
 //exp(a,b)%MODP
 __device__ uint ModExp(uint a,uint b){
 	uint ans=1;
@@ -62,7 +123,7 @@ __device__ uint ModExp(uint a,uint b){
 	}
 	return ans;
 }
-
+*/
 
 //逆変換後は、FFTでいうNで除算しないといけない。
 // a/arrayLength mod P
@@ -92,8 +153,8 @@ __global__ void FMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
-	w1=ABModC(arrayAt1,w0);
+	w0=MontgomeryExp(omega,t2*(arrayLength2/loopCnt_Pow2));
+	w1=MontgomeryMul(arrayAt1,w0);
 	r0=arrayAt0-w1+MODP;
 	r1=arrayAt0+w1;
 	if (r0>=MODP){r0-=MODP;}
@@ -113,12 +174,12 @@ __global__ void uFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
+	w0=MontgomeryExp(omega,t2*(arrayLength2/loopCnt_Pow2));
 	r0=arrayAt0-arrayAt1+MODP;
 	r1=arrayAt0+arrayAt1;
 	if (r0>=MODP){r0-=MODP;}
 	if (r1>=MODP){r1-=MODP;}
-	w1=ABModC(r0,w0);
+	w1=MontgomeryMul(r0,w0);
 	arrayA[t1]=w1;
 	arrayA[t0]=r1;	
 }
@@ -135,8 +196,8 @@ __global__ void iFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
-	w1=ABModC(arrayAt1,w0);
+	w0=MontgomeryExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
+	w1=MontgomeryMul(arrayAt1,w0);
 	r0=arrayAt0-w1+MODP;
 	r1=arrayAt0+w1;
 	if (r0>=MODP){r0-=MODP;}
@@ -157,12 +218,12 @@ __global__ void iuFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
+	w0=MontgomeryExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
 	r0=arrayAt0-arrayAt1+MODP;
 	r1=arrayAt0+arrayAt1;
 	if (r0>=MODP){r0-=MODP;}
 	if (r1>=MODP){r1-=MODP;}
-	w1=ABModC(r0,w0);
+	w1=MontgomeryMul(r0,w0);
 	arrayA[t1]=w1;
 	arrayA[t0]=r1;
 }
@@ -172,7 +233,7 @@ __global__ void iuFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength
 __global__ void Mul_i_i(uint *arrayA,uint *arrayB ) {
 	uint idx = threadIdx.x+blockIdx.x*256;
 	uint w0;
-	w0=ABModC(arrayB[idx],arrayA[idx]);
+	w0=MontgomeryMul(arrayB[idx],arrayA[idx]);
 	arrayB[idx]=w0;
 }
 
@@ -192,8 +253,8 @@ __global__ void DivN(uint *arrayA,uint arrayLength ) {
 //a[3]*=ModExp(sqrt_omega,3)
 __global__ void PreNegFMT(uint *arrayA,uint *arrayB,uint sqrt_omega,uint arrayLength) {
 	uint idx = threadIdx.x+blockIdx.x*256;
-	uint w0=ModExp(sqrt_omega,idx);
-	arrayB[idx]=ABModC(arrayA[idx],w0);
+	uint w0=MontgomeryExp(sqrt_omega,idx);
+	arrayB[idx]=MontgomeryMul(arrayA[idx],w0);
 }
 
 //負巡回計算の後処理
@@ -204,8 +265,8 @@ __global__ void PreNegFMT(uint *arrayA,uint *arrayB,uint sqrt_omega,uint arrayLe
 //a[3]*=ModExp(sqrt_omega,-3)
 __global__ void PostNegFMT(uint *arrayA,uint sqrt_omega,uint arrayLength) {
 	uint idx = threadIdx.x+blockIdx.x*256;
-	uint w0=ModExp(sqrt_omega,arrayLength*2-idx);
-	arrayA[idx]=ABModC(arrayA[idx],w0);
+	uint w0=MontgomeryExp(sqrt_omega,arrayLength*2-idx);
+	arrayA[idx]=MontgomeryMul(arrayA[idx],w0);
 }
 
 //負巡回計算と正巡回計算結果から、上半分桁と下半分桁を求める
@@ -230,8 +291,8 @@ __global__ void PostFMT_DivN_HiLo(uint *arrayE,uint *arrayA,uint *arrayB,uint ar
 	uint b=arrayB[idx];
 
 	//ここは負巡回の後処理計算部分
-	uint w0=ModExp(sqrt_omega,idx+(idx%2)*arrayLength);
-	b=ABModC(b,w0);
+	uint w0=MontgomeryExp(sqrt_omega,idx+(idx%2)*arrayLength);
+	b=MontgomeryMul(b,w0);
 	
 	//Nで除算する関数
 	a=DivN_f(a,arrayLength);

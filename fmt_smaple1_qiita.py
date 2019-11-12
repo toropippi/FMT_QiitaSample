@@ -1,6 +1,7 @@
 import numpy as np
 
 # MODP剰余下でaのb乗を返す
+# 追記1:np.uint32(pow(np.uint32(a),np.uint32(b),np.uint32(MODP)))を使ったほうが速い!
 def ModExp(a, b):
     ans = np.uint64(1)
     aa = np.uint64(a)

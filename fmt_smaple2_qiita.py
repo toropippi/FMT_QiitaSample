@@ -49,6 +49,7 @@ class FMTClass():
         self.MODP_Wn=np.uint32(MODP_Wn)
 
     # MODP剰余下でaのb乗を返す
+    # 追記1:np.uint32(pow(np.uint32(a),np.uint32(b),np.uint32(self.MODP)))を使ったほうが速い!
     def ModExp(self,a, b):
         ans = np.uint64(1)
         aa = np.uint64(a)

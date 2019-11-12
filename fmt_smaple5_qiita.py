@@ -2,6 +2,8 @@
 # 3つの素数PのもとでFMTを行うサンプル
 # garnerのアルゴリズムで最後に値を復元しているため、2の90.7乗まで正確に復元できる
 # 検算関数もあり
+
+# 追記1:これより1.2～1.8倍速いバージョンあり。(githubにある。剰余をモンゴメリ乗算に変えたやつ)
 import pycuda.autoinit
 import pycuda.driver as drv
 from pycuda.compiler import SourceModule

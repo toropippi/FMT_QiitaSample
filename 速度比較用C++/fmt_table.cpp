@@ -176,7 +176,7 @@ void PostNegFMT(vector<uint>& arrayA){
 
 //    #A*Bの畳み込み結果を返す
 //    #上位桁、下位桁を復元して2倍の要素数で返す
-void Convolution(vector<uint>& A_,vector<uint>& B_,vector<uint>& E,int pno){
+void Convolution(vector<uint>& A_,vector<uint>& B_,vector<uint>& E){
   //#正巡回
   vector<uint> A1(digitN),B1(digitN),A2(digitN),B2(digitN),Cpos(digitN),Cneg(digitN);
   for(int i=0;i<digitN;i++){
@@ -309,19 +309,16 @@ void CreateTable()
   }
 }
 
-/*
-void fSave(vector<uint> &svdata,int cnt)
+
+void fSave(vector<uint> &svdata,string filename)
 {
-  //ファイル名
-  string filename=to_string(cnt);
 	// バイナリ出力モードで開く
 	fstream file(filename.c_str(), ios::binary | ios::out);
 	// 書き込む
 	file.write((char*)&svdata[0], svdata.size()*4);
-	// 閉じる
 	file.close();
 }
-*/
+
 
 
 int main(){
@@ -342,21 +339,21 @@ int main(){
   uint starttime=clock();
   //Pだけ変えただけで、同じのを3つべた書きしている
   SetMod(0);
-  Convolution(A_,B_,E0,0);
+  Convolution(A_,B_,E0);
  
   SetMod(1);
-  Convolution(A_,B_,E1,1);
+  Convolution(A_,B_,E1);
 
   SetMod(2);
-  Convolution(A_,B_,E2,2);
+  Convolution(A_,B_,E2);
   
   Carrying(E0,E1,E2,E);
   cout<<"calc_time\t\t"<<(clock()-starttime)<<"msec"<<endl;
+
   //結果出力
-  /*
-  fSave(A_,0);
-  fSave(B_,1);
-  fSave(E,2);
-  */
+  fSave(A_,"A");
+  fSave(B_,"B");
+  fSave(E,"E");
+  
   return 0;
 }

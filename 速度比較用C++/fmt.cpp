@@ -16,9 +16,12 @@ mt19937 mt(rd()+(uint)time(NULL));
 uint digit_level;
 uint digitN;
 
-uint MODP,MODP0,MODP1,MODP2;
+uint MODP;
 uint MODP_WnSqrt;
 uint MODP_Wn;
+const uint MODP0=469762049;
+const uint MODP1=1811939329;
+const uint MODP2=2013265921;
 
 
 uint CreateWnSqrt(uint a,uint m,uint n_level){
@@ -172,7 +175,7 @@ void PostNegFMT(vector<uint>& arrayA){
 
 //    #A*Bの畳み込み結果を返す
 //    #上位桁、下位桁を復元して2倍の要素数で返す
-void Convolution(vector<uint>& A_,vector<uint>& B_,vector<uint>& E,int pno){
+void Convolution(vector<uint>& A_,vector<uint>& B_,vector<uint>& E){
   //#正巡回
   vector<uint> A1(digitN),B1(digitN),A2(digitN),B2(digitN),Cpos(digitN),Cneg(digitN);
   for(int i=0;i<digitN;i++){
@@ -188,7 +191,6 @@ void Convolution(vector<uint>& A_,vector<uint>& B_,vector<uint>& E,int pno){
   }
   iFMT(Cpos);
   DivN(Cpos);
-
 
   //# 負巡回
   PreNegFMT(A2);
@@ -257,6 +259,42 @@ void Carrying(vector<uint>& E0,vector<uint>& E1,vector<uint>& E2,vector<uint>& E
 }
 
 
+void SetMod(int pno)
+{
+  if (pno==0)
+  {
+    MODP=MODP0;
+    MODP_WnSqrt=CreateWnSqrt(60733,469762049,26);
+    MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
+    pMTABLE=&MTABLE0;
+  }
+  if (pno==1)
+  {
+    MODP=MODP1;
+    MODP_WnSqrt=CreateWnSqrt(59189,1811939329,26);
+    MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
+    pMTABLE=&MTABLE1;
+  }
+  if (pno==2)
+  {
+    MODP=MODP2;
+    MODP_WnSqrt=CreateWnSqrt(52278,2013265921,27);
+    MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
+    pMTABLE=&MTABLE2;
+  }
+}
+
+
+
+void fSave(vector<uint> &svdata,string filename)
+{
+	// バイナリ出力モードで開く
+	fstream file(filename.c_str(), ios::binary | ios::out);
+	// 書き込む
+	file.write((char*)&svdata[0], svdata.size()*4);
+	file.close();
+}
+
 
 
 
@@ -269,6 +307,7 @@ int main(){
   digitN=1<<digit_level;//乗算前の要素数。乗算結果は2*digitN要素数になる
 
   vector<uint> A_(digitN),B_(digitN),E0(digitN*2),E1(digitN*2),E2(digitN*2);
+  vector<uint> E(digitN*2,0);//結果格納変数
   for(int i=0;i<digitN;i++){
     A_[i]=mt();//ランダム初期値生成
     B_[i]=mt();//ランダム初期値生成
@@ -277,28 +316,24 @@ int main(){
   uint starttime=clock();
 
   //Pだけ変えただけで、同じのを3つべた書きしている
-  MODP0=469762049;
-  MODP=MODP0;
-  MODP_WnSqrt=CreateWnSqrt(60733,469762049,26);
-  MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-  Convolution(A_,B_,E0,0);
+  //Pだけ変えただけで、同じのを3つべた書きしている
+  SetMod(0);
+  Convolution(A_,B_,E0);
+ 
+  SetMod(1);
+  Convolution(A_,B_,E1);
 
-  MODP1=1811939329;
-  MODP=MODP1;
-  MODP_WnSqrt=CreateWnSqrt(59189,1811939329,26);
-  MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-  Convolution(A_,B_,E1,1);
+  SetMod(2);
+  Convolution(A_,B_,E2);
 
-  MODP2=2013265921;
-  MODP=MODP2;
-  MODP_WnSqrt=CreateWnSqrt(52278,2013265921,27);
-  MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-  Convolution(A_,B_,E2,2);
-
-
-  vector<uint> E(digitN*2,0);//結果格納変数
   Carrying(E0,E1,E2,E);
 
   cout<<"calc_time\t\t"<<(clock()-starttime)<<"msec"<<endl;
+
+  
+  //結果出力
+  fSave(A_,"A");
+  fSave(B_,"B");
+  fSave(E,"E");
   return 0;
 }

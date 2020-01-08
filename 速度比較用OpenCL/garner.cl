@@ -1,7 +1,7 @@
 
-#define MOD_P0 469762049
-#define MOD_P1 1811939329
-#define MOD_P2 2013265921
+#define MOD_P0 ((ulong)469762049)
+#define MOD_P1 ((ulong)1811939329)
+#define MOD_P2 ((ulong)2013265921)
 
 
 //３つの互いに素なPが与えられるので、それぞれの余りから元の値を復元したい
@@ -20,13 +20,13 @@ __kernel void Garner(__global uint *arrayE0,__global uint *arrayE1,__global uint
 	ulong x=ar;
 	ulong brx=br-x+MOD_P1;
 	if (brx>=MOD_P1)brx-=MOD_P1;
-	x=x+(brx*1540148431)%MOD_P1*MOD_P0;
+	x=x+(brx*(ulong)1540148431)%MOD_P1*MOD_P0;
 	//1540148431=modinv(MOD_P0,MOD_P1)
 	//この時点でxはMOD_P1*MOD_P0以下であることが保証されている
 
 	ulong crx=cr+MOD_P2-x%MOD_P2;
 	if (crx>=MOD_P2)crx-=MOD_P2;
-	ulong w1=(crx*1050399624)%MOD_P2;
+	ulong w1=(crx*(ulong)1050399624)%MOD_P2;
 	//1050399624=modinv(MOD_P0,MOD_P2) *modinv(MOD_P1,MOD_P2)%MOD_P2
 	ulong w2=MOD_P0*MOD_P1;
 	ulong out_lo=w1*w2;
@@ -38,9 +38,9 @@ __kernel void Garner(__global uint *arrayE0,__global uint *arrayE1,__global uint
 	out_lo+=x;
 	
 	//ここから繰り上がり処理
-	uint ui00_32=(uint)(out_lo%(1<<32));
-	uint ui32_64=(uint)(out_lo/(1<<32));
-	uint ui64_96=(uint)(out_hi%(1<<32));
+	uint ui00_32=(uint)(out_lo%((ulong)4294967296));
+	uint ui32_64=(uint)(out_lo/((ulong)4294967296));
+	uint ui64_96=(uint)(out_hi%((ulong)4294967296));
 	
 	uint lastE3_0 = atomic_add( &arrayE3[idx+0], ui00_32 );
 	if ((lastE3_0+ui00_32)<lastE3_0){//繰り上がりを考慮

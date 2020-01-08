@@ -35,10 +35,9 @@ uint DivN_f(uint a,uint arrayLength)
 
 
 
-
-
-__kernel void uFMT(__global uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
+__kernel void uFMT(__global uint *arrayA,uint loopCnt,uint arrayLength,__global uint *mtable ) {
 	uint idx = get_global_id(0);
+	uint loopCnt_Pow2=1<<loopCnt;
 	uint t2 = idx%loopCnt_Pow2;
 	uint t0 = idx*2-t2;
 	uint t1 = t0+loopCnt_Pow2;
@@ -48,7 +47,10 @@ __kernel void uFMT(__global uint *arrayA,uint loopCnt_Pow2,uint omega,uint array
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
+	//w0=ModExp(omega,t2*(arrayLength/2/loopCnt_Pow2));
+	uint ridx=t2*(arrayLength>>(loopCnt+1));
+	if (ridx>=arrayLength)ridx-=arrayLength;
+	w0=mtable[ridx];
 	r0=arrayAt0-arrayAt1+MODP;
 	r1=arrayAt0+arrayAt1;
 	if (r0>=MODP){r0-=MODP;}
@@ -59,8 +61,9 @@ __kernel void uFMT(__global uint *arrayA,uint loopCnt_Pow2,uint omega,uint array
 }
 
 
-__kernel void iFMT(__global uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
+__kernel void iFMT(__global uint *arrayA,uint loopCnt,uint arrayLength,__global uint *mtable ) {
 	uint idx = get_global_id(0);
+	uint loopCnt_Pow2=1<<loopCnt;
 	uint t2 = idx%loopCnt_Pow2;
 	uint t0 = idx*2-t2;
 	uint t1 = t0+loopCnt_Pow2;
@@ -70,7 +73,10 @@ __kernel void iFMT(__global uint *arrayA,uint loopCnt_Pow2,uint omega,uint array
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
+	//w0=ModExp(omega,arrayLength2*2-t2*(arrayLength/2/loopCnt_Pow2));
+	uint ridx=arrayLength-t2*(arrayLength>>(loopCnt+1));
+	if (ridx>=arrayLength)ridx-=arrayLength;
+	w0=mtable[ridx];
 	w1=ABModC(arrayAt1,w0);
 	r0=arrayAt0-w1+MODP;
 	r1=arrayAt0+w1;
@@ -102,11 +108,13 @@ __kernel void DivN(__global uint *arrayA,uint arrayLength ) {
 //a[1]*=ModExp(sqrt_omega,1)
 //a[2]*=ModExp(sqrt_omega,2)
 //a[3]*=ModExp(sqrt_omega,3)
-__kernel void PreNegFMT(__global uint *arrayA,__global uint *arrayB,uint sqrt_omega,uint arrayLength) {
+__kernel void PreNegFMT(__global uint *arrayA,__global uint *arrayB,uint arrayLength,__global uint *mtable,uint omega_sqrt) {
 	uint idx = get_global_id(0);
-	uint ara=arrayA[idx]%MODP;//�{���K�v�Ȃ�������A,B�͂��Ȃ炸��]����ĂȂ��Ɛ������v�Z�ł��Ȃ��̂ł��̊֐��ɂ܂Ƃ߂Ă��܂�
+	uint ara=arrayA[idx]%MODP;//本来必要ないが入力A,Bはかならず剰余されてないと正しく計算できないのでこの関数にまとめてしまう
 	arrayA[idx]=ara;
-	uint w0=ModExp(sqrt_omega,idx);
+	//uint w0=ModExp(omega_sqrt,idx);
+	uint w0=mtable[idx/2];
+	if (idx%2==1)w0=ABModC(w0,omega_sqrt);
 	arrayB[idx]=ABModC(ara,w0);
 }
 
@@ -115,9 +123,11 @@ __kernel void PreNegFMT(__global uint *arrayA,__global uint *arrayB,uint sqrt_om
 //a[1]*=ModExp(sqrt_omega,-1)
 //a[2]*=ModExp(sqrt_omega,-2)
 //a[3]*=ModExp(sqrt_omega,-3)
-__kernel void PostNegFMT(__global uint *arrayA,uint sqrt_omega,uint arrayLength) {
+__kernel void PostNegFMT(__global uint *arrayA,uint arrayLength,__global uint *mtable,uint omega_sqrt) {
 	uint idx = get_global_id(0);
-	uint w0=ModExp(sqrt_omega,arrayLength*2-idx);
+	//uint w0=ModExp(omega_sqrt,arrayLength*2-idx);
+	uint w0=mtable[((arrayLength*2-idx)/2)%arrayLength];
+	if (idx%2==1)w0=ABModC(w0,omega_sqrt);
 	arrayA[idx]=ABModC(arrayA[idx],w0);
 }
 
@@ -134,3 +144,10 @@ __kernel void PosNeg_To_HiLo(__global uint *arrayE,__global uint *arrayA,__globa
 	arrayE[idx]=a-subab+MODP*(a<subab);
 }
 
+
+__kernel void CreateTabel(__global uint *mtable,__global uint *mtable_sqrt,uint sqrt_omega){
+	uint idx = get_global_id(0);
+	mtable_sqrt[idx*2]=ModExp(sqrt_omega,idx*2);
+	mtable_sqrt[idx*2+1]=ABModC(mtable_sqrt[idx*2],sqrt_omega);
+	mtable[idx]=mtable_sqrt[idx*2];
+}

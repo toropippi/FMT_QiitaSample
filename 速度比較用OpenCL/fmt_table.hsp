@@ -37,18 +37,18 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 	prggnr=HCLCreateProgram("garner.cl")
 	krngnr=HCLCreateKernel(prggnr,"Garner")
 
-	exist "fmt.cl"
+	exist "fmt_table.cl"
 	sdim fmtclstr,strsize+1024
 	sdim fmtclstr2,strsize+1024
-	bload "fmt.cl",fmtclstr
+	bload "fmt_table.cl",fmtclstr
 
 		repeat 3
 		fmtclstr2="#define MODP ("+MODP.cnt+")\n"+fmtclstr
-		bsave "fmt0"+cnt+".cl",fmtclstr2,strlen(fmtclstr2)
+		bsave "fmt0"+cnt+"_table.cl",fmtclstr2,strlen(fmtclstr2)
 		loop	
 	wait 5
 		repeat 3
-		prg.cnt=HCLCreateProgram("fmt0"+cnt+".cl")//オンラインコンパイル
+		prg.cnt=HCLCreateProgram("fmt0"+cnt+"_table.cl")//オンラインコンパイル
 		krniFMT.cnt=HCLCreateKernel(prg.cnt,"iFMT")
 		krnuFMT.cnt=HCLCreateKernel(prg.cnt,"uFMT")
 		krnMul_i_i.cnt=HCLCreateKernel(prg.cnt,"Mul_i_i")
@@ -56,7 +56,16 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 		krnPreNegFMT.cnt=HCLCreateKernel(prg.cnt,"PreNegFMT")
 		krnDivN.cnt=HCLCreateKernel(prg.cnt,"DivN")
 		krnPosNeg_To_HiLo.cnt=HCLCreateKernel(prg.cnt,"PosNeg_To_HiLo")
+		krnCreateTable.cnt=HCLCreateKernel(prg.cnt,"CreateTabel")
 		loop
+    mes "MODテーブル生成"
+    dim_i64 mtable,3
+    dim_i64 mtable_sqrt,3
+	    repeat 3
+	    mtable.cnt=HCLCreateBuffer(digitN*4)
+	    mtable_sqrt.cnt=HCLCreateBuffer(digitN*4*2)
+	    loop
+    CreateTabel//引数なし関数
 	return
 
 #deffunc setpid int inpid
@@ -66,14 +75,14 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 
 #deffunc uFMT var gpuMemA
 		repeat digit_level
-		HCLSetKrns krnuFMT.pid ,gpuMemA,1<<(digit_level-1-cnt),MODP_Wn.pid,1 << (digit_level - 1)
+		HCLSetKrns krnuFMT.pid ,gpuMemA,digit_level-1-cnt,digitN,mtable.pid
 		HCLDoKrn1 krnuFMT.pid,gsz,lsz
 		loop
     return
 
 #deffunc iFMT var gpuMemA
 		repeat digit_level
-		HCLSetKrns krniFMT.pid ,gpuMemA,1<<cnt,MODP_Wn.pid,1 << (digit_level - 1)
+		HCLSetKrns krniFMT.pid ,gpuMemA,cnt,digitN,mtable.pid
 		HCLDoKrn1 krniFMT.pid,gsz,lsz
 		loop
     return
@@ -90,12 +99,12 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 
 
 #deffunc PreNegFMT var gpuMemA,var gpuMemB
-	HCLSetKrns krnPreNegFMT.pid,gpuMemA,gpuMemB,MODP_WnSqrt.pid,1<<digit_level
+	HCLSetKrns krnPreNegFMT.pid,gpuMemA,gpuMemB,1<<digit_level,mtable.pid,MODP_WnSqrt.pid
 	HCLDoKrn1 krnPreNegFMT.pid,gsz2,lsz2
 	return
 
 #deffunc PostNegFMT var gpuMemA
-	HCLSetKrns krnPostNegFMT.pid,gpuMemA,MODP_WnSqrt.pid,1<<digit_level
+	HCLSetKrns krnPostNegFMT.pid,gpuMemA,1<<digit_level,mtable.pid,MODP_WnSqrt.pid
 	HCLDoKrn1 krnPostNegFMT.pid,gsz2,lsz2
     return
 
@@ -109,6 +118,13 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 	HCLDoKrn1 krngnr,gsz3,lsz3
 	return
 
+#deffunc CreateTabel
+	repeat 3
+		HCLSetKrns krnCreateTable.cnt,mtable.cnt,mtable_sqrt.cnt,MODP_WnSqrt.cnt
+		HCLDoKrn1 krnCreateTable.cnt,gsz2,lsz2
+	loop
+	return
+	
 #deffunc Convolution array A,array B,array E
     A_Neg = HCLCreateBuffer(digitN*4)
     B_Neg = HCLCreateBuffer(digitN*4)
@@ -248,8 +264,8 @@ if HCLGetDevCount()=0:dialog "対応ビデオカードがありません。終了します",1:end
 *TmpFileDelete
 	wait 1
 	mes "一時ファイル削除"
-	delete "fmt00.cl"
-	delete "fmt01.cl"
-	delete "fmt02.cl"
+	delete "fmt00_table.cl"
+	delete "fmt01_table.cl"
+	delete "fmt02_table.cl"
 	mes "終了"
 	return

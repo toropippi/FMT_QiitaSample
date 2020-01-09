@@ -1,10 +1,8 @@
 # FMT(高速剰余変換) PyCUDA版
 # 3つの素数PのもとでFMTを行うサンプル
-# garnerのアルゴリズムで最後に値を復元しているため、2の90.7乗まで正確に復元できる
-# 検算関数もあり
+# ここで1の原始n乗根の0乗～n-1乗までをあらかじめ計算した配列を用意して、それを参照する方式をとる
+# これにより2-5倍高速化(sample5比)
 
-# 追記1:これより1.2～1.8倍速いバージョンあり。(githubにある。剰余をモンゴメリ乗算に変えたやつ)
-# 追記2:これより2～5倍速いバージョンあり。剰余をあらかじめ計算して参照するタイプ(sample6)
 import pycuda.autoinit
 import pycuda.driver as drv
 from pycuda.compiler import SourceModule
@@ -24,42 +22,33 @@ class FMTClass():
         self.MODP_Wn = np.uint32(np.uint64(self.MODP_WnSqrt) * np.uint64(self.MODP_WnSqrt) % np.uint64(self.MODP))
         self.programid = SourceModule("""
             #define MODP (uint)(""" + str(MODP) + """)
-                #include "fmt.cu"
+                #include "fmt_table.cu"
             """, include_dirs=[os.getcwd()])
-        self.kernel_FMT=self.programid.get_function("FMT")
         self.kernel_iFMT=self.programid.get_function("iFMT")
         self.kernel_uFMT=self.programid.get_function("uFMT")
-        self.kernel_iuFMT=self.programid.get_function("iuFMT")
         self.kernel_Mul_i_i=self.programid.get_function("Mul_i_i")
         self.kernel_PostNegFMT=self.programid.get_function("PostNegFMT")
         self.kernel_PreNegFMT=self.programid.get_function("PreNegFMT")
         self.kernel_DivN=self.programid.get_function("DivN")
         self.kernel_PosNeg_To_HiLo=self.programid.get_function("PosNeg_To_HiLo")
         self.kernel_PostFMT_DivN_HiLo=self.programid.get_function("PostFMT_DivN_HiLo")
+        self.kernel_CreateTable = self.programid.get_function("CreateTable")
+        self.mtable = drv.mem_alloc(4 * digitN)
+        self.CreateTable()
 
-
-    def FMT(self,gpuMemA):
-        for i in range(digit_level):
-            self.kernel_FMT(gpuMemA, np.uint32(1 << i), self.MODP_Wn, np.uint32(1 << (digit_level - 1)),
-                         grid=(gsz // lsz, 1, 1), block=(lsz, 1, 1))
-        return
 
     def uFMT(self,gpuMemA):
         for i in range(digit_level):
-            self.kernel_uFMT(gpuMemA, np.uint32((1<<(digit_level-1))>>i), self.MODP_Wn, np.uint32(1 << (digit_level - 1)),
+            self.kernel_uFMT(gpuMemA, np.uint32(digit_level-1-i), self.MODP_Wn,
+                             np.uint32(1 << digit_level),self.mtable,
                          grid=(gsz // lsz, 1, 1), block=(lsz, 1, 1))
         return
 
     def iFMT(self,gpuMemA):
         for i in range(digit_level):
-            self.kernel_iFMT(gpuMemA, np.uint32(1 << i), self.MODP_Wn,
-                         np.uint32(1 << (digit_level - 1)), grid=(gsz // lsz, 1, 1), block=(lsz, 1, 1))
-        return
-
-    def iuFMT(self,gpuMemA):
-        for i in range(digit_level):
-            self.kernel_iuFMT(gpuMemA, np.uint32(1<<(digit_level-1-i)), self.MODP_Wn,
-                         np.uint32(1 << (digit_level - 1)), grid=(gsz // lsz, 1, 1), block=(lsz, 1, 1))
+            self.kernel_iFMT(gpuMemA, np.uint32(i), self.MODP_Wn,
+                         np.uint32(1 << digit_level),self.mtable
+                             ,grid=(gsz // lsz, 1, 1), block=(lsz, 1, 1))
         return
 
     def Mul_i_i(self,gpuMemA,gpuMemB):
@@ -72,12 +61,14 @@ class FMTClass():
 
     def PreNegFMT(self,gpuMemA,gpuMemB):
         self.kernel_PreNegFMT(gpuMemA,gpuMemB, self.MODP_WnSqrt,
-                                    np.uint32(1<<digit_level), grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
+                              self.mtable,np.uint32(1<<digit_level),
+                              grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
         return
 
     def PostNegFMT(self,gpuMemA):
         self.kernel_PostNegFMT(gpuMemA, self.MODP_WnSqrt,
-                                     np.uint32(1<<digit_level), grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
+                               self.mtable,np.uint32(1<<digit_level),
+                               grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
         return
 
     def PosNeg_To_HiLo(self,gpuMemE,gpuMemA,gpuMemB):
@@ -88,6 +79,11 @@ class FMTClass():
     def PostFMT_DivN_HiLo(self,gpuMemE,gpuMemA,gpuMemB):
         self.kernel_PostFMT_DivN_HiLo(gpuMemE, gpuMemA, gpuMemB, np.uint32(1 << digit_level),
                                  self.MODP_WnSqrt,grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
+        return
+
+
+    def CreateTable(self):
+        self.kernel_CreateTable(self.mtable,self.MODP_Wn,grid=(gsz2 // lsz2, 1, 1), block=(lsz2, 1, 1))
         return
 
     # FMTで畳み込み乗算の結果を得る

@@ -38,9 +38,9 @@ __device__ uint DivN_f(uint a,uint arrayLength)
 
 
 
-//arrayLength2 = arrayLength/2
-__global__ void FMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
+__global__ void uFMT(uint *arrayA,uint loopCnt,uint omega,uint arrayLength ,uint *mtable) {
 	uint idx = threadIdx.x+blockIdx.x*256;
+	uint loopCnt_Pow2=1<<loopCnt;
 	uint t2 = idx%loopCnt_Pow2;
 	uint t0 = idx*2-t2;
 	uint t1 = t0+loopCnt_Pow2;
@@ -50,28 +50,10 @@ __global__ void FMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
-	w1=ABModC(arrayAt1,w0);
-	r0=arrayAt0-w1+MODP;
-	r1=arrayAt0+w1;
-	if (r0>=MODP){r0-=MODP;}
-	if (r1>=MODP){r1-=MODP;}
-	arrayA[t1]=r0;
-	arrayA[t0]=r1;
-}
-
-__global__ void uFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
-	uint idx = threadIdx.x+blockIdx.x*256;
-	uint t2 = idx%loopCnt_Pow2;
-	uint t0 = idx*2-t2;
-	uint t1 = t0+loopCnt_Pow2;
-	uint w0;
-	uint w1;
-	uint arrayAt0=arrayA[t0];
-	uint arrayAt1=arrayA[t1];
-	uint r0;
-	uint r1;
-	w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
+	uint ridx=t2*(arrayLength>>(loopCnt+1));
+	if (ridx>=arrayLength)ridx-=arrayLength;
+	w0=mtable[ridx];
+	//w0=ModExp(omega,t2*(arrayLength2/loopCnt_Pow2));
 	r0=arrayAt0-arrayAt1+MODP;
 	r1=arrayAt0+arrayAt1;
 	if (r0>=MODP){r0-=MODP;}
@@ -82,8 +64,9 @@ __global__ void uFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2
 }
 
 
-__global__ void iFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
+__global__ void iFMT(uint *arrayA,uint loopCnt,uint omega,uint arrayLength ,uint *mtable) {
 	uint idx = threadIdx.x+blockIdx.x*256;
+	uint loopCnt_Pow2=1<<loopCnt;
 	uint t2 = idx%loopCnt_Pow2;
 	uint t0 = idx*2-t2;
 	uint t1 = t0+loopCnt_Pow2;
@@ -93,35 +76,16 @@ __global__ void iFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2
 	uint arrayAt1=arrayA[t1];
 	uint r0;
 	uint r1;
-	w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
+	uint ridx=arrayLength-t2*(arrayLength>>(loopCnt+1));
+	if (ridx>=arrayLength)ridx-=arrayLength;
+	w0=mtable[ridx];
+	//w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
 	w1=ABModC(arrayAt1,w0);
 	r0=arrayAt0-w1+MODP;
 	r1=arrayAt0+w1;
 	if (r0>=MODP){r0-=MODP;}
 	if (r1>=MODP){r1-=MODP;}
 	arrayA[t1]=r0;
-	arrayA[t0]=r1;
-}
-
-
-__global__ void iuFMT(uint *arrayA,uint loopCnt_Pow2,uint omega,uint arrayLength2 ) {
-	uint idx = threadIdx.x+blockIdx.x*256;
-	uint t2 = idx%loopCnt_Pow2;
-	uint t0 = idx*2-t2;
-	uint t1 = t0+loopCnt_Pow2;
-	uint w0;
-	uint w1;
-	uint arrayAt0=arrayA[t0];
-	uint arrayAt1=arrayA[t1];
-	uint r0;
-	uint r1;
-	w0=ModExp(omega,arrayLength2*2-t2*(arrayLength2/loopCnt_Pow2));
-	r0=arrayAt0-arrayAt1+MODP;
-	r1=arrayAt0+arrayAt1;
-	if (r0>=MODP){r0-=MODP;}
-	if (r1>=MODP){r1-=MODP;}
-	w1=ABModC(r0,w0);
-	arrayA[t1]=w1;
 	arrayA[t0]=r1;
 }
 
@@ -148,10 +112,13 @@ __global__ void DivN(uint *arrayA,uint arrayLength ) {
 //a[1]*=ModExp(sqrt_omega,1)
 //a[2]*=ModExp(sqrt_omega,2)
 //a[3]*=ModExp(sqrt_omega,3)
-__global__ void PreNegFMT(uint *arrayA,uint *arrayB,uint sqrt_omega,uint arrayLength) {
+__global__ void PreNegFMT(uint *arrayA,uint *arrayB,uint sqrt_omega,uint *mtable,uint arrayLength) {
 	uint idx = threadIdx.x+blockIdx.x*256;
-	arrayA[idx]%=MODP;
-	uint w0=ModExp(sqrt_omega,idx);
+	//w0=ModExp(sqrt_omega,idx);
+	uint w0=mtable[idx/2];
+	if (idx%2==1)
+		w0=ABModC(sqrt_omega,w0);
+	arrayA[idx]%=MODP;//これは本来必要ないが、一番最初に入力されたA,Bが必ずMODPの剰余下の値になっているとは限らないので
 	arrayB[idx]=ABModC(arrayA[idx],w0);
 }
 
@@ -161,9 +128,12 @@ __global__ void PreNegFMT(uint *arrayA,uint *arrayB,uint sqrt_omega,uint arrayLe
 //a[1]*=ModExp(sqrt_omega,-1)
 //a[2]*=ModExp(sqrt_omega,-2)
 //a[3]*=ModExp(sqrt_omega,-3)
-__global__ void PostNegFMT(uint *arrayA,uint sqrt_omega,uint arrayLength) {
+__global__ void PostNegFMT(uint *arrayA,uint sqrt_omega,uint *mtable,uint arrayLength) {
 	uint idx = threadIdx.x+blockIdx.x*256;
-	uint w0=ModExp(sqrt_omega,arrayLength*2-idx);
+	//uint w0=ModExp(sqrt_omega,arrayLength*2-idx);	
+	uint w0=mtable[(arrayLength*2-idx)%(arrayLength*2)/2];
+	if (idx%2==1)
+		w0=ABModC(sqrt_omega,w0);
 	arrayA[idx]=ABModC(arrayA[idx],w0);
 }
 
@@ -203,4 +173,12 @@ __global__ void PostFMT_DivN_HiLo(uint *arrayE,uint *arrayA,uint *arrayB,uint ar
 	subab/=2;//(a-b)/2 MOD Pを算出
 	arrayE[idx+arrayLength]=subab;//上位桁は(a-b)/2 MOD P
 	arrayE[idx]=a-subab+MODP*(a<subab);//a-((a-b)/2)=a/2+b/2 つまり(a+b)/2が下位桁
+}
+
+
+
+//最初にべき乗余を計算する関数
+__global__ void CreateTable(uint *mtable,uint omega) {
+	uint idx = threadIdx.x+blockIdx.x*256;
+	mtable[idx]=ModExp(omega,idx);
 }

@@ -109,8 +109,7 @@ void iFMT(vector<uint>& arrayA){
         t1 = t0 + loopCnt_Pow2;
         arrayAt0 = arrayA[t0];
         arrayAt1 = arrayA[t1];
-        //w0 = expmod();
-        w0=(*pMTABLE)[digitN - t2 * (1 << (digit_level - 1 - i))];
+        w0 = expmod();
         w1 = (uint)((ull)arrayAt1 * (ull)w0 % (ull)MODP);
         arrayAt1=arrayAt0 + MODP - w1;
         if (arrayAt1>=MODP)arrayAt1-=MODP;

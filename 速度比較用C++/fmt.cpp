@@ -266,21 +266,18 @@ void SetMod(int pno)
     MODP=MODP0;
     MODP_WnSqrt=CreateWnSqrt(60733,469762049,26);
     MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-    pMTABLE=&MTABLE0;
   }
   if (pno==1)
   {
     MODP=MODP1;
     MODP_WnSqrt=CreateWnSqrt(59189,1811939329,26);
     MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-    pMTABLE=&MTABLE1;
   }
   if (pno==2)
   {
     MODP=MODP2;
     MODP_WnSqrt=CreateWnSqrt(52278,2013265921,27);
     MODP_Wn=(uint)((ull)MODP_WnSqrt*(ull)MODP_WnSqrt%(ull)MODP);
-    pMTABLE=&MTABLE2;
   }
 }
 

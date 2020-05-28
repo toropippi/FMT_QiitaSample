@@ -9,14 +9,40 @@ import numpy as np
 import os
 
 
-programid_garner=SourceModule("""
-    #include "garner.cu"
-""",include_dirs=[os.getcwd()])
-kernel_garner=programid_garner.get_function("GarnerGPU")
+# cuファイルを読み込みコンパイル。ここでnvccがコンパイルするわけだが
+# nvccに紐づけられているコンパイラがMicrosoft Visual C++ コンパイラだと
+# CRの改行コードでエラーになるのでCRFLに書き換える。他のコンパイラは知らん
+def ReplaceCRFL(cu_filename):
+    with open(cu_filename, 'r',encoding='utf-8') as a_file:
+        txt = a_file.read()
+        txt = txt.replace("\r", "\r\n")
+        with open("win_"+cu_filename, 'w') as b_file:
+            # 文字列をバイト列にして保存する
+            b_file.write(txt)
+    return
 
-programid_addsub=SourceModule("""
-    #include "addsubmod.cu"
-""",include_dirs=[os.getcwd()])
+try:
+    programid_garner = SourceModule("""
+        #include "garner.cu"
+    """, include_dirs=[os.getcwd()])
+    kernel_garner = programid_garner.get_function("GarnerGPU")
+    programid_addsub = SourceModule("""
+        #include "addsubmod.cu"
+    """, include_dirs=[os.getcwd()])
+except:
+    ReplaceCRFL("garner.cu")
+    ReplaceCRFL("fmt.cu")
+    ReplaceCRFL("addsubmod.cu")
+    programid_garner = SourceModule("""
+        #include "win_garner.cu"
+    """, include_dirs=[os.getcwd()])
+    kernel_garner = programid_garner.get_function("GarnerGPU")
+    programid_addsub = SourceModule("""
+        #include "win_addsubmod.cu"
+    """, include_dirs=[os.getcwd()])
+
+
+
 kernel_CreateAmod=programid_addsub.get_function("CreateAmod")
 kernel_SubCAB=programid_addsub.get_function("SubCAB")
 kernel_AddCAB=programid_addsub.get_function("AddCAB")
@@ -37,10 +63,16 @@ class FMTClass():
         #self.MODP_Wn = np.uint32(np.uint64(self.MODP_WnSqrt) * np.uint64(self.MODP_WnSqrt) % np.uint64(self.MODP))
         self.MODP_WnSqrt = np.uint32(1)
         self.MODP_Wn = np.uint32(1)
-        self.programid = SourceModule("""
-            #define MODP (uint)(""" + str(MODP) + """)
-                #include "fmt.cu"
-            """, include_dirs=[os.getcwd()])
+        try:
+            self.programid = SourceModule("""
+                #define MODP (uint)(""" + str(MODP) + """)
+                    #include "fmt.cu"
+                """, include_dirs=[os.getcwd()])
+        except:
+            self.programid = SourceModule("""
+                #define MODP (uint)(""" + str(MODP) + """)
+                    #include "win_fmt.cu"
+                """, include_dirs=[os.getcwd()])
         self.kernel_FMT=self.programid.get_function("FMT")
         self.kernel_iFMT=self.programid.get_function("iFMT")
         self.kernel_uFMT=self.programid.get_function("uFMT")

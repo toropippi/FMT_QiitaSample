@@ -10,20 +10,50 @@ import numpy as np
 import time
 import os
 
-programid_garner=SourceModule("""
-    #include "garner.cu"
-""",include_dirs=[os.getcwd()])
-kernel_garner=programid_garner.get_function("GarnerGPU")
+# cuファイルを読み込みコンパイル。ここでnvccがコンパイルするわけだが
+# nvccに紐づけられているコンパイラがMicrosoft Visual C++ コンパイラだと
+# CRの改行コードでエラーになるのでCRFLに書き換える。他のコンパイラは知らん
+def ReplaceCRFL(cu_filename):
+    with open(cu_filename, 'r',encoding='utf-8') as a_file:
+        txt = a_file.read()
+        txt = txt.replace("\r", "\r\n")
+        with open("win_"+cu_filename, 'w') as b_file:
+            # 文字列をバイト列にして保存する
+            b_file.write(txt)
+    return
+
+try:
+    programid_garner = SourceModule("""
+        #include "garner.cu"
+    """, include_dirs=[os.getcwd()])
+    kernel_garner = programid_garner.get_function("GarnerGPU")
+except:
+    ReplaceCRFL("garner.cu")
+    ReplaceCRFL("fmt_table.cu")
+    programid_garner = SourceModule("""
+        #include "win_garner.cu"
+    """, include_dirs=[os.getcwd()])
+    kernel_garner = programid_garner.get_function("GarnerGPU")
+
+
+
+
 
 class FMTClass():
     def __init__(self,MODP,MODP_WnSqrt):
         self.MODP=np.uint32(MODP)
         self.MODP_WnSqrt = np.uint32(MODP_WnSqrt)
         self.MODP_Wn = np.uint32(np.uint64(self.MODP_WnSqrt) * np.uint64(self.MODP_WnSqrt) % np.uint64(self.MODP))
-        self.programid = SourceModule("""
-            #define MODP (uint)(""" + str(MODP) + """)
-                #include "fmt_table.cu"
-            """, include_dirs=[os.getcwd()])
+        try:
+            self.programid = SourceModule("""
+                #define MODP (uint)(""" + str(MODP) + """)
+                    #include "fmt_table.cu"
+                """, include_dirs=[os.getcwd()])
+        except:
+            self.programid = SourceModule("""
+                #define MODP (uint)(""" + str(MODP) + """)
+                    #include "win_fmt_table.cu"
+                """, include_dirs=[os.getcwd()])
         self.kernel_iFMT=self.programid.get_function("iFMT")
         self.kernel_uFMT=self.programid.get_function("uFMT")
         self.kernel_Mul_i_i=self.programid.get_function("Mul_i_i")

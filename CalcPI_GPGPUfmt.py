@@ -1,3 +1,5 @@
+# 円周率piをGPUで計算するコード
+# digit_levelを変えることで出力桁数を変えられる。後は変えられるパラメータはない
 import FMTLongintGPU as flint
 
 import pycuda.autoinit
@@ -8,7 +10,7 @@ import time
 
 
 cardinal = 4294967296 # 基数
-digit_level = 22 #2以下または26以上で正しく実行できない
+digit_level = 25 #2以下または26以上で正しく実行できない
 #digit_level 20のとき500万桁(10進数)
 #21で1000万、24で8000万桁
 print(cardinal,"進数",(1<<digit_level),"桁")
